@@ -5,124 +5,52 @@
 
 #include "header.h"
 
-// Turing machine state structure
-typedef struct {
-    char *state;
-    char symbol;
-    char newSymbol;
-    char direction;
-    char *newState;
-} State;
-
-typedef struct {
-    char symbol;
-    char newSymbol;
-    char direction;
-    char* newState;
-} Shift;
-
-typedef struct {
-    char *state;
-    Shift *shifts;
-    int shiftCount;
-    int maxShifts;
-} stateMain;
-
-typedef struct {
-    char *tape;
-    int head, tapeSize;
-    char *currentState;
-} turingMachine;
-
-void destroyState(State *states, int statesCount) {
-    for ( int i = 0 ; i < statesCount ; i++ ) {
-        free(states[i].state);
-        free(states[i].newState);
-    }
-    free(states);
+void ParseFirstLines(char *name, char *init, char *accept) {
+    char *aux = (char*)malloc(100*sizeof(char));
+    strcpy(aux, name + 6);
+    strcpy(name, aux);
+    strcpy(aux, init+6);
+    strcpy(init, aux);
+    strcpy(aux, accept+8);
+    strcpy(accept, aux);
+    free(aux);
+    name[strlen(name)-1] = '\0';
+    init[strlen(init)-1] = '\0';
+    accept[strlen(accept)-1] = '\0';
 }
 
-void printStateMain(stateMain *mainState, int mainStatesCount) {
-    for ( int j = 0 ; j < mainStatesCount ; j++ ) {
-        printf("State: %s\n", mainState[j].state);
-        for (int i = 0; i < mainState[j].shiftCount; i++) {
-            printf("Symbol: %c\n", mainState[j].shifts[i].symbol);
-            printf("New symbol: %c\n", mainState[j].shifts[i].newSymbol);
-            printf("Direction: %c\n", mainState[j].shifts[i].direction);
-            printf("New state: %s\n", mainState[j].shifts[i].newState);
-        }
-    }
-}
-
-void destroyStateMain(stateMain *mainState, int mainStatesCount) {
+stateMain* genStateMain(int mainStatesCount, char **mainStates, State *states, int statesCount) {
+    // Create main states
+    stateMain *mainStatesArray = (stateMain*)malloc(mainStatesCount * sizeof(stateMain));
     for ( int i = 0 ; i < mainStatesCount ; i++ ) {
-        free(mainState[i].shifts);
-    }
-    free(mainState);
-}
-
-void initTape(turingMachine *tm, char *input) {
-    tm->tape = (char*)malloc(100 * sizeof(char));
-    memset(tm->tape, '_', 100);
-    tm->tapeSize = strlen(input);
-    strcpy(tm->tape, input);
-    tm->head = 0;
-}
-
-void resizeTape(turingMachine *tm) {
-    char *newTape = (char*)malloc(3 * tm->tapeSize*sizeof(char));
-    memset(newTape, '_', 3 * tm->tapeSize);
-    strncpy(newTape + tm->tapeSize, tm->tape, tm->tapeSize);
-    free(tm->tape);
-    tm->tape = newTape;
-    tm->head += tm->tapeSize;
-    tm->tapeSize *= 3;
-
-}
-
-void moveHead(turingMachine *tm, char direction) {
-    if (direction == '<') {
-        if (tm->head == 0) {
-            resizeTape(tm);
-        }
-        tm->head--;
-    } else {
-        if (tm->head == tm->tapeSize-1) {
-            resizeTape(tm);
-        }
-        tm->head++;
-    }
-}
-
-void printTape(turingMachine *tm, char *nextState) {
-    printf("State: %s -> %s\n", tm->currentState, nextState);
-    for (int i = 0; i < tm->tapeSize; i++) {
-        if (i == tm->head) {
-            printf("[%c] ", tm->tape[i]);
-        } else {
-            printf("%c ", tm->tape[i]);
+        mainStatesArray[i].state = mainStates[i];
+        mainStatesArray[i].shifts = (Shift*)malloc(5 * sizeof(Shift));
+        mainStatesArray[i].shiftCount = 0;
+        mainStatesArray[i].maxShifts = 5;
+        // Link shifts to main states
+        for ( int j = 0 ; j < statesCount ; j++ ) {
+            if ( strcmp(states[j].state, mainStates[i]) == 0 ) {
+                mainStatesArray[i].shifts[mainStatesArray[i].shiftCount].symbol = states[j].symbol;
+                mainStatesArray[i].shifts[mainStatesArray[i].shiftCount].newSymbol = states[j].newSymbol;
+                mainStatesArray[i].shifts[mainStatesArray[i].shiftCount].direction = states[j].direction;
+                mainStatesArray[i].shifts[mainStatesArray[i].shiftCount].newState = states[j].newState;
+                mainStatesArray[i].shiftCount++;
+                if ( mainStatesArray[i].shiftCount == mainStatesArray[i].maxShifts ) {
+                    mainStatesArray[i].shifts = realloc(mainStatesArray[i].shifts, 2 * mainStatesArray[i].maxShifts * sizeof(Shift));
+                    mainStatesArray[i].maxShifts *= 2;
+                }
+            }
         }
     }
-    printf("\n\n");
+    return mainStatesArray;
 }
 
-void showState(State state) {
-    printf("State: %s\n", state.state);
-    printf("Symbol: %c\n", state.symbol);
-    printf("New symbol: %c\n", state.newSymbol);
-    printf("Direction: %c\n", state.direction);
-    printf("New state: %s\n", state.newState);
-    printf("\n");
-}
-
-int main() {
-    char *name, *init, *accept;
+stateMain *readData(char *init, char *accept, int *mainStatesCnt, State **statesRet, int *statesCountRet) {
+    char *name = (char*)malloc(100*sizeof(char));
     State *states = (State*)malloc(100*sizeof(State));
     int statesCount = 0;
     int maxStates = 5;
-    name = (char*)malloc(100*sizeof(char));
-    init = (char*)malloc(100*sizeof(char));
-    accept = (char*)malloc(100*sizeof(char));
+
     FILE *in = fopen("in", "r");
     // Check for potential comments
     while (true) {
@@ -135,21 +63,8 @@ int main() {
     }
     fgets(init, 100, in);
     fgets(accept, 100, in);
-    // Parse data
-    char *aux = (char*)malloc(100*sizeof(char));
-    strcpy(aux, name + 6);
-    strcpy(name, aux);
-    // strcpy(name, name+6);
-    strcpy(aux, init+6);
-    // strcpy(init, init+6);
-    strcpy(init, aux);
-    strcpy(aux, accept+8);
-    // strcpy(accept, accept+8);
-    strcpy(accept, aux);
-    free(aux);
-    name[strlen(name)-1] = '\0';
-    init[strlen(init)-1] = '\0';
-    accept[strlen(accept)-1] = '\0';
+
+    ParseFirstLines(name, init, accept);
 
     char *emptyLine = (char*)malloc(100*sizeof(char));
     char *line1 = (char*)malloc(100*sizeof(char));
@@ -208,44 +123,34 @@ int main() {
             mainStates[mainStatesCount] = states[i].state;
             mainStatesCount++;
             if ( mainStatesCount == maxMainStates ) {
-                mainStates = realloc(mainStates, 2*maxMainStates*sizeof(char*));
+                mainStates = realloc(mainStates, 2 * maxMainStates*sizeof(char*));
                 maxMainStates *= 2;
             }
         }
     }
 
-    // Print vector pointer array
-    for ( int i = 0 ; i < mainStatesCount ; i++ ) {
-        printf("mainStates[%d] = %s\n", i, mainStates[i]);
-    }
+    stateMain *mainStatesArray = genStateMain(mainStatesCount, mainStates, states, statesCount);
 
-    // Create main states
-    stateMain *mainStatesArray = (stateMain*)malloc(mainStatesCount*sizeof(stateMain));
-    for ( int i = 0 ; i < mainStatesCount ; i++ ) {
-        mainStatesArray[i].state = mainStates[i];
-        mainStatesArray[i].shifts = (Shift*)malloc(5*sizeof(Shift));
-        mainStatesArray[i].shiftCount = 0;
-        mainStatesArray[i].maxShifts = 5;
-        // Link shifts to main states
-        for ( int j = 0 ; j < statesCount ; j++ ) {
-            if ( strcmp(states[j].state, mainStates[i]) == 0 ) {
-                mainStatesArray[i].shifts[mainStatesArray[i].shiftCount].symbol = states[j].symbol;
-                mainStatesArray[i].shifts[mainStatesArray[i].shiftCount].newSymbol = states[j].newSymbol;
-                mainStatesArray[i].shifts[mainStatesArray[i].shiftCount].direction = states[j].direction;
+    // Return data
+    *mainStatesCnt = mainStatesCount;
+    *statesRet = states;
+    *statesCountRet = statesCount;
 
-                mainStatesArray[i].shifts[mainStatesArray[i].shiftCount].newState = states[j].newState;
+    free(name);
+    free(emptyLine);
+    free(line1);
+    free(line2);
+    free(mainStates);
+    fclose(in);
+    return mainStatesArray;
+}
 
-                mainStatesArray[i].shiftCount++;
-                if ( mainStatesArray[i].shiftCount == mainStatesArray[i].maxShifts ) {
-                    mainStatesArray[i].shifts = realloc(mainStatesArray[i].shifts, 2 * mainStatesArray[i].maxShifts * sizeof(Shift));
-                    mainStatesArray[i].maxShifts *= 2;
-                }
-            }
-        }
-    }
-
-    // Print main states
-    // printStateMain(mainStatesArray, mainStatesCount);
+int main() {
+    char *init = (char*)malloc(100*sizeof(char));
+    char *accept = (char*)malloc(100*sizeof(char));
+    int mainStatesCount, statesCount;
+    State *states;
+    stateMain *mainStatesArray = readData(init, accept, &mainStatesCount, &states, &statesCount);
 
     // Read input string
     char *input = (char*)malloc(100*sizeof(char));
@@ -254,7 +159,7 @@ int main() {
     // remove \n
     input[strlen(input)-1] = '\0';
 
-    fclose(in);
+
 
     printf("input ... : %s \n", input);
 
@@ -312,22 +217,12 @@ int main() {
         }
     }
 
-    // printTape(&tm, NULL);
     printf("Steps: %d\n", stepCnt);
-    printf("name: %s\n", name);
-    printf("init: %s\n", init);
-    printf("accept: %s\n", accept);
     destroyStateMain(mainStatesArray, mainStatesCount);
     destroyState(states, statesCount);
     free(tm.tape);
     free(input);
-    free(name);
     free(init);
     free(accept);
-    free(emptyLine);
-    free(line1);
-    free(line2);
-    free(mainStates);
-
     return 0;
 }
