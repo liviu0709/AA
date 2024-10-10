@@ -1,0 +1,54 @@
+// Input: a binary number n
+// Ouput: accepts if n mod 3 == 0
+// Example: accepts 110 (=6)
+//
+// Divisible by 3 Algorithm
+// for Turing Machine Simulator
+// turingmachinesimulator.com
+//
+// ------- States -----------|
+// q0 - mod3 == 0            |
+// q1 - mod3 == 1            |
+// q2 - mod3 == 2            |
+// qaccept - accepting state |
+//---------------------------|
+
+name: Start != End
+init: q0
+accept: qAccept
+
+q0,0
+Found0,0,>
+
+q0,1
+Found1,1,>
+
+Found0,0
+Found0,0,>
+
+Found0,1
+Found0,1,>
+
+Found0,_
+Expect1,_,<
+
+Expect1,1
+qAccept,1,-
+
+Expect1,0
+qReject,0,-
+
+Found1,1
+Found1,1,>
+
+Found1,0
+Found1,0,>
+
+Found1,_
+Expect0,_,<
+
+Expect0,0
+qAccept,0,-
+
+Expect0,1
+qReject,1,-
