@@ -1,2 +1,3 @@
 *.tms
 *.xlsx
+__pycache__/
