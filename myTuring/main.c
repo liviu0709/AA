@@ -159,8 +159,6 @@ int main() {
     // remove \n
     input[strlen(input)-1] = '\0';
 
-
-
     printf("input ... : %s \n", input);
 
     turingMachine tm;
@@ -168,6 +166,7 @@ int main() {
     int stepCnt = 0;
 
     initTape(&tm, input);
+    printTape(&tm, tm.currentState);
 
     // Run the Turing machine
     bool letMeOut = false;
@@ -185,10 +184,14 @@ int main() {
                     if ( mainStatesArray[i].shifts[j].symbol == tm.tape[tm.head] ) {
                         stepCnt++;
                         found = true;
-                        printTape(&tm, mainStatesArray[i].shifts[j].newState);
                         tm.tape[tm.head] = mainStatesArray[i].shifts[j].newSymbol;
+                        if ( mainStatesArray[i].shifts[j].direction != '-' ) {
+                            moveHead(&tm, mainStatesArray[i].shifts[j].direction);
+                        }
+                        printTape(&tm, mainStatesArray[i].shifts[j].newState);
                         tm.currentState = mainStatesArray[i].shifts[j].newState;
-                        if ( strcmp(tm.currentState, accept) == 0 ) {
+                        if ( strcmp(tm.currentState, accept) == 0 || strcmp(tm.currentState, "qAccept") == 0
+                        || strcmp(tm.currentState, "Y") == 0 ) {
                             printf("Accepted\n");
                             letMeOut = true;
                             break;
@@ -203,9 +206,6 @@ int main() {
                             letMeOut = true;
                             break;
                         }
-                        if ( mainStatesArray[i].shifts[j].direction != '-' ) {
-                            moveHead(&tm, mainStatesArray[i].shifts[j].direction);
-                        }
                         break;
                     }
                 }
@@ -216,7 +216,6 @@ int main() {
             break;
         }
     }
-
     printf("Steps: %d\n", stepCnt);
     destroyStateMain(mainStatesArray, mainStatesCount);
     destroyState(states, statesCount);
