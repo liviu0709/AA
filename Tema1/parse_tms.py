@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
 import sys
-from openpyxl import load_workbook
 
 import tm
 
 
 WS = "\t "
 TMS_BLANK_SYM = "_"
-DIR_TRANSLATION = {
-        "<": tm.Dir.LEFT, "-": tm.Dir.HOLD, ">": tm.Dir.RIGHT,
-        "L": tm.Dir.LEFT, "S": tm.Dir.HOLD, "R": tm.Dir.RIGHT,
-        "←": tm.Dir.LEFT, "−": tm.Dir.HOLD, "→": tm.Dir.RIGHT,
-        }
+DIR_TRANSLATION = {"<": tm.Dir.LEFT, "-": tm.Dir.HOLD, ">": tm.Dir.RIGHT}
 
 
 def eprint(*args, **kwargs):
@@ -109,53 +104,26 @@ def parse(contents):
     return tm.TuringMachine(init_state, delta)
 
 
-def parse_xlsx(path):
-    wb = load_workbook(filename=path)
-    sheet = wb.worksheets[0]
-    values = list(sheet.values)
-    symbols = values[0]
+def parse_tms(path):
+    with open(path) as fin:
+        contents = fin.read()
 
-    delta = {}
-    init_state = values[1][0]
-    for state_line in values[1:]:
-        state = state_line[0]
-        for i, sym in enumerate(symbols[1:]):
-            if not isinstance(sym, str):  # digits are interpreted as reals
-                try:
-                    sym = str(int(sym))
-                except TypeError:
-                    eprint(f"Error parsing line: {symbols}")
-                    raise
-            entry = state_line[i + 1]
-            if not entry:
-                entry = "N,_,-"
+    try:
+        machine = parse(contents)
+    except ParseException as e:
+        eprint(e)
+        sys.exit(1)
 
-            for ws in WS:
-                entry = entry.replace(ws, "")
-
-            #entry = entry.replace("(", "")
-            #entry = entry.replace(")", "")
-            try:
-                nstate, nsym, d = entry.split(",")
-            except ValueError:
-                eprint(f"Error parsing entry: {entry}")
-                raise
-            d = DIR_TRANSLATION[d]
-
-            if sym == "_":
-                sym = tm.BLANK_SYM
-
-            if nsym == "_":
-                nsym = tm.BLANK_SYM
-
-            delta[(state, sym)] = (nstate, nsym, d)
-
-    machine = tm.TuringMachine(init_state, delta)
     return machine
 
 
 def main():
-    pass
+    t = parse_tms(sys.argv[1])
+    t.init("💩00💩0")
+    print(t.current_config)
+    result = t.run(debug=True)
+    print(result)
+    print(t.current_config())
 
 
 if __name__ == "__main__":
