@@ -16,8 +16,6 @@ typedef struct {
 
 FILE *debug;
 
-int ModifyOrder[100];
-
 void printClause(Clause c) {
     for ( int i = 0 ; i < c.nrVars ; i++ )
         fprintf(debug, "%d ", c.vars[i]);
@@ -30,121 +28,91 @@ void printVars(Vars v, int nrVars) {
     fprintf(debug, "\n");
 }
 
-bool checkSat(Clause *c, int nrClauses, Vars *v, int nrVars) {
-    bool sat = true;
-    for ( int i = 0 ; i < nrClauses ; i++ ) {
-        bool satClause = false;
-        for ( int j = 0 ; j < c[i].nrVars ; j++ ) {
-            if ( c[i].vars[j] > 0 && v->option[c[i].vars[j] - 1] == true ) {
-                satClause = true;
-                break;
-            }
-            if ( c[i].vars[j] < 0 && v->option[-c[i].vars[j] - 1] == false ) {
-                satClause = true;
-                break;
-            }
-        }
-        if ( satClause == false ) {
-            sat = false;
-            break;
-        }
-    }
-    return sat;
-}
-
-// 1 -> ok, 0 -> not ok, 2 -> impossible
-int checkSatDetect(Clause *c, int nrClauses, Vars *v, int nrVars, int level) {
-    bool sat = true;
-    for ( int i = 0 ; i < nrClauses ; i++ ) {
-        bool satClause = false;
-        bool conflict = true;
-        for ( int j = 0 ; j < c[i].nrVars ; j++ ) {
-            if (v->evaluated[abs(c[i].vars[j]) - 1] >= level || v->evaluated[abs(c[i].vars[j]) - 1] == -1 ) {
-                 conflict = false;
-            }
-            if ( c[i].vars[j] > 0 && v->option[c[i].vars[j] - 1] == true ) {
-                satClause = true;
-                break;
-            }
-            if ( c[i].vars[j] < 0 && v->option[-c[i].vars[j] - 1] == false ) {
-                satClause = true;
-                break;
-            }
-        }
-        if ( conflict == true && satClause == false )
-            return 2;
-        if ( satClause == false ) {
-            sat = false;
-            break;
-        }
-    }
-    return sat;
-}
-
-// Classic backtracking
-bool bktBasic(Vars *start, Clause *c, int nrClauses, int nrVars, int level) {
-    if ( checkSat(c, nrClauses, start, nrVars) == true )
-        return true;
-    if ( level == nrVars )
-        return false;
-    if ( bktBasic(start, c, nrClauses, nrVars, level + 1) )
-        return true;
-    if ( start->option[level] == false ) {
-        start->option[level] = true;
-    } else {
-        start->option[level] = false;
-    }
-    if ( bktBasic(start, c, nrClauses, nrVars, level + 1) )
-            return true;
-    return false;
-}
-
 bool bktUnitPropagation(Vars *start, Clause *c, int nrClauses, int nrVars, int level) {
 
-    // printVars(*start, nrVars);
-    if ( level > nrVars )
-        return false;
-    int ret = checkSatDetect(c, nrClauses, start, nrVars, level);
-
-    if ( ret == 1 )
+    int freeVarIndex = -1;
+    // Unit clause propagation
+    for ( bool unitClause = true ; unitClause ; ) {
+        unitClause = false;
+        for ( int i = 0 ; i < nrClauses ; i++ ) {
+            bool clauseChecksOut = false;
+            int freeVar = 0;
+            int freeVarValue = 0;
+            for ( int j = 0 ; j < c[i].nrVars ; j++ ) {
+                // Count free vars
+                if ( start->evaluated[abs(c[i].vars[j]) - 1] == -1 ) {
+                    freeVar++;
+                    freeVarIndex = abs(c[i].vars[j]) - 1;
+                    freeVarValue = c[i].vars[j];
+                } else {
+                    // Check if clause is already good
+                    if ( c[i].vars[j] > 0 && start->option[c[i].vars[j] - 1] == true ) {
+                        clauseChecksOut = true;
+                        break;
+                    }
+                    if ( c[i].vars[j] < 0 && start->option[-c[i].vars[j] - 1] == false ) {
+                        clauseChecksOut = true;
+                        break;
+                    }
+                }
+            }
+            if ( clauseChecksOut == false && freeVar == 0 )
+                return false;
+            // We can do propagation :)
+            if ( clauseChecksOut == false && freeVar == 1 ) {
+                start->evaluated[freeVarIndex] = level + 1;
+                if ( freeVarValue > 0 )
+                    start->option[freeVarIndex] = true;
+                else
+                    start->option[freeVarIndex] = false;
+                unitClause = true;
+                break;
+            }
+        }
+    }
+    // Check if all vars have values
+    bool solution = true;
+    for ( int i = 0 ; i < nrVars ; i++ ) {
+        if ( start->evaluated[i] == -1 ) {
+            solution = false;
+            break;
+        }
+    }
+    if ( solution == true )
         return true;
-
-    if ( ret == 2 )
-        return false;
-
-    int toModify = -1;
-    // bool found = false;
-    // // fprintf(debug, "level %d\n", level);
-    // for ( int i = 0 ; i < nrClauses && !found ; i++ ) {
-    //     for ( int j = 0 ; j < c[i].nrVars && !found ; j++ ) {
-    //         if ( start->evaluated[abs(c[i].vars[j]) - 1] > level || start->evaluated[abs(c[i].vars[j]) - 1] == -1 ) {
-    //             toModify = abs(c[i].vars[j]) - 1;
-    //             fprintf(debug, "toModify %d, level %d\n", toModify + 1, level);
-    //             found = true;
-    //         }
-    //     }
-    // }
-    toModify = ModifyOrder[level];
-    fprintf(debug, "toModify %d, level %d\n", toModify + 1, level);
-    if ( toModify != - 1 ) {
-        start->evaluated[toModify] = level + 1;
-
-        start->option[toModify] = true;
+    // Keep going!
+    // Find free var
+    for ( int i = 0 ; i < nrVars ; i++ ) {
+        if ( start->evaluated[i] == -1 ) {
+            freeVarIndex = i;
+            break;
+        }
+    }
+    if ( start->evaluated[freeVarIndex] == -1 ) {
+        start->evaluated[freeVarIndex] = level + 1;
+        start->option[freeVarIndex] = true;
         if ( bktUnitPropagation(start, c, nrClauses, nrVars, level + 1) )
             return true;
 
-        start->option[toModify] = false;
+        // Reset modified vars by recursion
+        for ( int i  = 0 ; i < nrVars ; i++ ) {
+                if (start->evaluated[i] > level + 1) {
+                    start->evaluated[i] = -1;
+            }
+        }
 
+        start->option[freeVarIndex] = false;
         if ( bktUnitPropagation(start, c, nrClauses, nrVars, level + 1) )
             return true;
+        start->evaluated[freeVarIndex] = -1;
     }
     return false;
 }
 
 int main(int argc, char *argv[]) {
     debug = fopen("debug", "w");
-    // debug = stdout;
-    // printf("ayo\n");
+    debug = stdout;
+
     if ( argc != 3 ) {
         printf("Da date bune de input...\n");
         return 1;
@@ -152,11 +120,6 @@ int main(int argc, char *argv[]) {
     FILE *f1 = fopen(argv[1], "r");
     FILE *out = fopen(argv[2], "w");
 
-    // printf("Opened file\n");
-
-    // fscanf(f1, "%d", &n);
-    // fprintf(f2, "%d\n", n);
-    // Read data from file till eof
     char *word = malloc(100);
     Clause *clauses;
     Vars *vars;
@@ -171,7 +134,7 @@ int main(int argc, char *argv[]) {
         } if ( word[0] == 'c' )
             fgets(word, 100, f1);
     }
-    // printf("nrVars %d nrClauses %d\n", nrVars, nrClauses);
+
     for ( int i = 0 ; i < nrClauses ; i++ ) {
         clauses[i].vars = malloc(nrVars * sizeof(int));
         clauses[i].nrVars = 0;
@@ -181,10 +144,7 @@ int main(int argc, char *argv[]) {
                 break;
             clauses[i].nrVars++;
         }
-        // printClause(clauses[i]);
     }
-
-    // printf("bkt soon\n");
 
     vars = malloc(sizeof(Vars));
     vars->vars = malloc(nrVars * sizeof(int));
@@ -200,35 +160,10 @@ int main(int argc, char *argv[]) {
 
     int ignoreMe = 0;
 
-    /*
-    Getting the order of the bkt algorithm
-    */
-    int order = 0;
-    for ( int i = 0 ; i < nrClauses ; i++ ) {
-        for ( int j = 0 ; j < clauses[i].nrVars; j++ ) {
-            if ( vars->evaluated[abs(clauses[i].vars[j]) - 1] == -1 ) {
-                ModifyOrder[order] = abs(clauses[i].vars[j]) - 1;
-                // maybe order + 1
-                vars->evaluated[abs(clauses[i].vars[j]) - 1] = order + 1;
-                order++;
-            }
-        }
-    }
-    ModifyOrder[order] = -1;
-    ModifyOrder[order + 1] = -1;
-    ModifyOrder[order + 2] = -1;
-
-    // basic bkt or bkt with conflict detection offers same score :/
-    // printf("f call\n");
     if ( bktUnitPropagation(vars, clauses, nrClauses, nrVars, ignoreMe) ) {
-    // if ( bktBasic(vars, clauses, nrClauses, nrVars, ignoreMe) ) {
         fprintf(out, "s SATISFIABLE\n");
         for ( int i = 0 ; i < nrVars ; i++ )
             fprintf(out, "v %d\n", vars->option[i] ? i + 1 : -(i + 1));
     } else
         fprintf(out, "s UNSATISFIABLE\n");
-
-    // Print my ordered thingy
-    // for ( int i = 0 ; i < nrVars ; i++ )
-    //     fprintf(debug, "Order: %d Var num: %d\n", ModifyOrder[i], vars->vars[ModifyOrder[i]]);
 }
