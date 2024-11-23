@@ -9,24 +9,9 @@ typedef struct {
 
 typedef struct {
     int *vars;
-    int *nrOptions;
     bool *option;
     int *evaluated;
 } Vars;
-
-FILE *debug;
-
-void printClause(Clause c) {
-    for ( int i = 0 ; i < c.nrVars ; i++ )
-        fprintf(debug, "%d ", c.vars[i]);
-    fprintf(debug, "| nrvar: %d \n", c.nrVars);
-}
-
-void printVars(Vars v, int nrVars) {
-    for ( int i = 0 ; i < nrVars ; i++ )
-        fprintf(debug, "Var: %d, Opt: %d, Eval: %d |||", i + 1, v.option[i], v.evaluated[i]);
-    fprintf(debug, "\n");
-}
 
 bool bktUnitPropagation(Vars *start, Clause *c, int nrClauses, int nrVars, int level) {
 
@@ -110,9 +95,6 @@ bool bktUnitPropagation(Vars *start, Clause *c, int nrClauses, int nrVars, int l
 }
 
 int main(int argc, char *argv[]) {
-    debug = fopen("debug", "w");
-    debug = stdout;
-
     if ( argc != 3 ) {
         printf("Da date bune de input...\n");
         return 1;
@@ -148,12 +130,10 @@ int main(int argc, char *argv[]) {
 
     vars = malloc(sizeof(Vars));
     vars->vars = malloc(nrVars * sizeof(int));
-    vars->nrOptions = malloc(nrVars * sizeof(int));
     vars->option = malloc(nrVars * sizeof(bool));
     vars->evaluated = malloc(nrVars * sizeof(int));
     for ( int i = 0 ; i < nrVars ; i++ ) {
         vars->vars[i] = i + 1;
-        vars->nrOptions[i] = 2;
         vars->option[i] = false;
         vars->evaluated[i] = -1;
     }
@@ -166,4 +146,14 @@ int main(int argc, char *argv[]) {
             fprintf(out, "v %d\n", vars->option[i] ? i + 1 : -(i + 1));
     } else
         fprintf(out, "s UNSATISFIABLE\n");
+
+    fclose(f1);
+    fclose(out);
+    for ( int i = 0 ; i < nrClauses ; i++ )
+        free(clauses[i].vars);
+    free(clauses);
+    free(vars->vars);
+    free(vars->option);
+    free(vars->evaluated);
+    free(vars);
 }
