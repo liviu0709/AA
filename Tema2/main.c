@@ -153,6 +153,7 @@ void addClauseStart(Clause* c) {
 typedef struct {
     int *vars;
     bool *option;
+    int *score;
     int *evaluated;
     int *decisionLevel;
     int *previous;
@@ -289,7 +290,7 @@ void analyzeConflict(Clause *c, Vars *start, int nrVars, Clause *learnedClause, 
     }
     // printf("Max found: %d\n", maxFound);
     int p = -1;
-    // int uip = -1;
+    int uip = -1;
     Clause *reason = c;
     // int numConflicts = 0;
     for ( int i = 0 ; i < c->nrVars ; i++ ) {
@@ -319,25 +320,27 @@ void analyzeConflict(Clause *c, Vars *start, int nrVars, Clause *learnedClause, 
     //     return;
     // }
     memset(seen, false, nrVars * sizeof(bool));
-    int cc = 1;
+    int cc = 0;
     // int cc = 0;
     int learnedClauseIndex = 0;
     learnedClause->nrVars = 0;
-    // int decLevel = 0;
+    int decLevel = 0;
     // printf("Starting farming learnt clauses with: \n");
     // printClause(reason);
     do {
         // cc++;
         if ( reason == NULL ) {
             printf("Reason is null\n");
-        } else {
+            break;
+        }
+
             for ( int i = 0 ; i < reason->nrVars ; i++ ) {
                 if ( seen[abs(reason->vars[i]) - 1] == false ) {
                     seen[abs(reason->vars[i]) - 1] = true;
-                    // if ( start->evaluated[abs(reason->vars[i]) - 1] == maxFound ) {
-                    // } else
-                    if (decidedTrailElement(abs(reason->vars[i]))) {
-                        // cc++;
+                    if ( start->evaluated[abs(reason->vars[i]) - 1] == maxFound ) {
+                    // if (decidedTrailElement(abs(reason->vars[i]))) {
+                        cc++;
+                    } else {
                         // learnedClause->vars[learnedClauseIndex] = -reason->vars[i];
                         learnedClause->vars[learnedClauseIndex] = start->option[abs(reason->vars[i]) - 1] ? -abs(reason->vars[i]) : +abs(reason->vars[i]);
                         learnedClauseIndex++;
@@ -350,16 +353,16 @@ void analyzeConflict(Clause *c, Vars *start, int nrVars, Clause *learnedClause, 
                             return;
                         }
                     } //else
-                       cc++;
+                    //    cc++;
 
                 }
             }
-        }
+
             do {
                 freeCnt++;
                 TrailElement t = removeTrailElement(copyStop);
                 p = abs(t.var) - 1;
-                // uip = t.value ? t.var : -t.var;
+                uip = t.value ? t.var : -t.var;
                 reason = t.cause;
                 // decLevel = t.decisionLevel;
                 // printf("P is %d\n", p);
@@ -369,28 +372,28 @@ void analyzeConflict(Clause *c, Vars *start, int nrVars, Clause *learnedClause, 
             printf("Current node: %d\n", p + 1);
             if ( reason ) {
                 printClause(reason);
-                // printf("Propagated reasons.. with cc : %d\n", cc);
+                printf("Propagated reasons.. with cc : %d\n", cc);
             }
             cc--;
 
     } while ( cc );
     // } while ( cc > 0 );
     // Add the uip
-    // if ( p != -1 ) {
-    //     learnedClause->vars[learnedClauseIndex] = -uip;
-    //     learnedClauseIndex++;
-    //     learnedClause->nrVars++;
-    //     *backjump = decLevel;
-    //     if ( learnedClause->nrVars > 9 ) {
-    //         *ok = 5;
-    //         while ( removeTrailElement(copyStop).var != 0 )
-    //             freeCnt++;
-    //         // printf("Free count: %d\n", freeCnt);
-    //         return;
-    //     }
-    // } else {
-    //     printf("P is -1\n");
-    // }
+    if ( p != -1 ) {
+        learnedClause->vars[learnedClauseIndex] = -uip;
+        learnedClauseIndex++;
+        learnedClause->nrVars++;
+        *backjump = decLevel;
+        if ( learnedClause->nrVars > 9 ) {
+            *ok = 5;
+            while ( removeTrailElement(copyStop).var != 0 )
+                freeCnt++;
+            // printf("Free count: %d\n", freeCnt);
+            return;
+        }
+    } else {
+        printf("P is -1\n");
+    }
 
     // Empty stack
     while ( removeTrailElement(copyStop).var != 0 )
@@ -409,10 +412,15 @@ void analyzeConflict(Clause *c, Vars *start, int nrVars, Clause *learnedClause, 
     // }
     learnedClause->learnedClause = true;
     // printClause(learnedClause);
-    // *backjump = maxFound;
-    // for ( int i = 0 ; i < learnedClause->nrVars ; i++ )
-        // if ( start->evaluated[abs(learnedClause->vars[i]) - 1] < *backjump && start->evaluated[abs(learnedClause->vars[i]) - 1] != -1 )
-            // *backjump = start->evaluated[abs(learnedClause->vars[i]) - 1];
+    *backjump = maxFound;
+    for ( int i = 0 ; i < learnedClause->nrVars ; i++ )
+        if ( start->evaluated[abs(learnedClause->vars[i]) - 1] < *backjump && start->evaluated[abs(learnedClause->vars[i]) - 1] != -1 )
+            *backjump = start->evaluated[abs(learnedClause->vars[i]) - 1];
+    int secondMin = *backjump;
+    for ( int i = 0 ; i < learnedClause->nrVars ; i++ )
+        if ( start->evaluated[abs(learnedClause->vars[i]) - 1] < secondMin && start->evaluated[abs(learnedClause->vars[i]) - 1] != -1 && start->evaluated[abs(learnedClause->vars[i]) - 1] != *backjump )
+            secondMin = start->evaluated[abs(learnedClause->vars[i]) - 1];
+    *backjump = secondMin;
     printf("Backjump diff: %d\n", *backjump - maxLevel);
 
 
@@ -474,11 +482,12 @@ bool bktUnitPropagation(Vars *start, Clause *c, int nrClauses, int nrVars, int l
     //     printf("^^^^ LEARNED!\n");
     // }
     bool efficientVarSearch = false;
-    int varIndex = 0;
+    // int varIndex = 0;
     goingUp = 0;
     if ( !goingUp ) {
         // Unit clause propagation
         for ( bool unitClause = true ; unitClause ; ) {
+            efficientVarSearch = false;
             unitClause = false;
             Clause *p = startC;
 
@@ -586,6 +595,7 @@ bool bktUnitPropagation(Vars *start, Clause *c, int nrClauses, int nrVars, int l
                         mallocYes = false;
                         // learn = NULL;
                         return false;
+                        // backjump++;
                         // if ( backjump == 0 ) {
                             // return false;
                         // }
@@ -637,7 +647,7 @@ bool bktUnitPropagation(Vars *start, Clause *c, int nrClauses, int nrVars, int l
                 }
                 if ( freeVar >= 2 && efficientVarSearch == false && p->learnedClause == true ) {
                     efficientVarSearch = true;
-                    varIndex = freeVarIndex;
+                    // varIndex = freeVarIndex;
                 }
                 // printf("Clause checks out\n");
             }
@@ -655,16 +665,24 @@ bool bktUnitPropagation(Vars *start, Clause *c, int nrClauses, int nrVars, int l
     }
     // Keep going!
     // Find free var
-    if ( efficientVarSearch == true && start->evaluated[varIndex] == -1 ) {
-        freeVarIndex = varIndex;
-    } else {
-        for ( int i = nrVars - 1 ; i >= 0 ; i-- ) {
-            if ( start->evaluated[i] == -1 ) {
+    // if ( efficientVarSearch == true && start->evaluated[varIndex] == -1 ) {
+        // freeVarIndex = varIndex;
+    // } else {
+    int maxScore = 0;
+        for ( int i = 0 ; i < nrVars ; i++ ) {
+            if ( start->evaluated[i] == -1 && start->score[i] > maxScore ) {
+                // freeVarIndex = i;
+                // break;
+                maxScore = start->score[i];
+            }
+        }
+        for ( int i = 0 ; i < nrVars ; i++ ) {
+            if ( start->evaluated[i] == -1 && start->score[i] == maxScore ) {
                 freeVarIndex = i;
                 break;
             }
         }
-    }
+    // }
 
     if ( start->evaluated[freeVarIndex] == -1 ) {
         start->evaluated[freeVarIndex] = level;
@@ -756,6 +774,18 @@ void pureLiteralElimination(Vars *start, Clause *c, int nrClauses, int nrVars) {
     }
 }
 
+void getVarsScore(Vars *start, int nrVars) {
+    memset(start->score, 0, nrVars * sizeof(int));
+    for ( Clause *p = startC ; p ; p = p->next ) {
+        for ( int i = 0 ; i < p->nrVars ; i++ ) {
+            if ( p->vars[i] > 0 )
+                start->score[p->vars[i] - 1]++;
+            else
+                start->score[-p->vars[i] - 1]++;
+        }
+    }
+}
+
 int main(int argc, char *argv[]) {
     if ( argc != 3 ) {
         printf("Da date bune de input...\n");
@@ -801,6 +831,7 @@ int main(int argc, char *argv[]) {
 
     vars = malloc(sizeof(Vars));
     vars->vars = malloc(nrVars * sizeof(int));
+    vars->score = malloc(nrVars * sizeof(int));
     vars->option = malloc(nrVars * sizeof(bool));
     vars->evaluated = malloc(nrVars * sizeof(int));
     // vars->decisionLevel = malloc(nrVars * sizeof(int));
@@ -819,6 +850,9 @@ int main(int argc, char *argv[]) {
     // memset(vars->evaluated, -1, nrVars * sizeof(int));
     memset(swapped, 0, 1000 * sizeof(int));
     int nrLearnedClauses = 0;
+
+    getVarsScore(vars, nrVars);
+
 
     if ( bktUnitPropagation(vars, clauses, nrClauses, nrVars, ignoreMe, &nrLearnedClauses, 0) ) {
         fprintf(out, "s SATISFIABLE\n");
